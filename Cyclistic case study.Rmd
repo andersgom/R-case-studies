@@ -1,0 +1,264 @@
+---
+title: "Cyclistic case study (Google Data Analytics)"
+author: Andrés Sánchez Gómez
+output: html_notebook
+---
+
+
+## About the company
+
+Cyclistic is a successful **bike sharing company** founded in 2016 with a fleet of 5,824 geotracked bicycles that are locked into a network of 692 stations across Chicago. Their **pricing plan** is divided between people who purchase temporary passes, called **casual riders**, and people who purchase annual memberships, called **Cyclistic members**. They realized that Cyclistic members are **more profitable** than casual riders, and maximizing the number of annual members could be the key to **future growth**. With this analysis, they expect to get insights about each customer segment to plan their marketing strategy accordingly.
+
+## Questions for the analysis
+
+* How do annual members and casual riders use Cyclistic bikes differently?
+* Why would casual riders buy Cyclistic annual memberships?
+* How can Cyclistic use digital media to influence casual riders to become members?
+
+
+## The business task
+
+**Identify trends** analyzing the Cyclistic historical bike trip data to understand **how casual riders and annual members differ**, with the goal of designing marketing strategies aimed at **converting** those casual riders to annual members.
+
+## Setting up the environment
+
+For this case study I will use `tidyverse` and `lubridate`.
+
+```{r Loading packages, echo=TRUE}
+library(tidyverse)
+library(lubridate)
+```
+
+## Importing data
+
+```{r Import data, include=FALSE}
+cyclistic_202011 <- read_csv("Dataset/202011-divvy-tripdata.csv")
+cyclistic_202012 <- read_csv("Dataset/202012-divvy-tripdata.csv")
+cyclistic_202101 <- read_csv("Dataset/202101-divvy-tripdata.csv")
+cyclistic_202102 <- read_csv("Dataset/202102-divvy-tripdata.csv")
+cyclistic_202103 <- read_csv("Dataset/202103-divvy-tripdata.csv")
+cyclistic_202104 <- read_csv("Dataset/202104-divvy-tripdata.csv")
+cyclistic_202105 <- read_csv("Dataset/202105-divvy-tripdata.csv")
+cyclistic_202106 <- read_csv("Dataset/202106-divvy-tripdata.csv")
+cyclistic_202107 <- read_csv("Dataset/202107-divvy-tripdata.csv")
+cyclistic_202108 <- read_csv("Dataset/202108-divvy-tripdata.csv")
+cyclistic_202109 <- read_csv("Dataset/202109-divvy-tripdata.csv")
+cyclistic_202110 <- read_csv("Dataset/202110-divvy-tripdata.csv")
+```
+
+## Description of the data
+
+The dataset was provided by Google through this [link](https://divvy-tripdata.s3.amazonaws.com/index.html), it was made available by Motivate International Inc. under this [license](https://www.divvybikes.com/data-license-agreement).
+For this analysis I uploaded this [kaggle dataset](AÑADE EL LINK) with the relevant months for the analysis, from November 2020 to October 2021.
+
+The original data is composed by 12 different .CSV files, containing data of each month, with information about the bike type, start and end date of each ride, details about the stations and type of membership.
+
+## Cleaning and manipulation process
+
+These changes were applied:
+
+* Dropped the columns I won't use for this analysis, the rows that contain N/A values.
+
+```{r Dropping columns and n/a values, echo=TRUE}
+cyclistic_202011 <- cyclistic_202011 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202012 <- cyclistic_202012 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202101 <- cyclistic_202101 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202102 <- cyclistic_202102 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202103 <- cyclistic_202103 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202104 <- cyclistic_202104 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202105 <- cyclistic_202105 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202106 <- cyclistic_202106 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202107 <- cyclistic_202107 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202108 <- cyclistic_202108 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202109 <- cyclistic_202109 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+cyclistic_202110 <- cyclistic_202110 %>%
+  select(ride_id, rideable_type, started_at, ended_at, member_casual) %>%
+  drop_na()
+```
+
+* Merged the data into 4 quarters with `bind_rows()`.
+
+```{r Merge into quarters, echo=TRUE}
+q1_nov_jan <- bind_rows(cyclistic_202011, cyclistic_202012, cyclistic_202101)
+q2_feb_apr <- bind_rows(cyclistic_202102, cyclistic_202103, cyclistic_202104)
+q3_may_jul <- bind_rows(cyclistic_202105, cyclistic_202106, cyclistic_202107)
+q4_aug_oct <- bind_rows(cyclistic_202108, cyclistic_202109, cyclistic_202110)
+```
+
+* Merged everything into one data frame.
+
+```{r Merge everything, echo=TRUE}
+all_trips <- bind_rows(q1_nov_jan,q2_feb_apr,q3_may_jul,q4_aug_oct)
+```
+
+* Deleted the entries of bikes that were taken out of docks for a quality check in the rideable_type column.
+
+```{r}
+all_trips <- all_trips%>%
+  filter(!rideable_type == "docked_bike")
+```
+
+
+* Added a column called ride_length_sec, calculating the length of each ride with `difftime()`.
+
+```{r Add ride_length_sec, echo=TRUE}
+
+all_trips$ride_length_sec <- difftime(all_trips$ended_at, all_trips$started_at)
+
+```
+
+* Added a column called weekday that shows the day of the week of each ride, using `wday()`.
+
+```{r Add weekday, echo=TRUE}
+all_trips$weekday <- wday(all_trips$started_at, label = TRUE, abbr = FALSE, week_start = getOption("lubridate.week.start", 1))
+levels(all_trips$weekday) <- c("Monday", "Tuesday","Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+```
+* Added a column called month following a similar method of the previous step, but using `month()`.
+
+```{r}
+all_trips$month <- month(all_trips$started_at, label = TRUE, abbr = FALSE)
+levels(all_trips$month) <- c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")
+```
+
+* Removed the negative values in ride_length_sec.
+```{r Remove negative values, echo=TRUE}
+all_trips <- all_trips%>%
+  filter(!ride_length_sec<0)
+```
+
+* Added a date column.
+```{r}
+
+all_trips$date = all_trips$started_at
+all_trips$date <- as.Date(all_trips$date)
+
+```
+
+
+
+## Analysis
+
+To get a first idea of how casual riders and annual members use this service, I performed a descriptive analysis on ride_length_sec to know the median and average time of a ride, and the longest and shortest rides. For the second table, I grouped the data by member_casual and weekday to see how these values change between members and casual riders each day. The third table shows the preference between the classic bike and the electric bike of each user type.
+
+```{r}
+all_trips%>%
+  summarize(mean = mean(ride_length_sec), median = median(ride_length_sec), max = max(ride_length_sec), min = min(ride_length_sec))
+```
+
+```{r}
+all_trips_stats <- all_trips%>%
+  group_by(member_casual, weekday)%>%
+  summarize(mean = mean(ride_length_sec), median = median(ride_length_sec), max = max(ride_length_sec), min = min(ride_length_sec))
+all_trips_stats
+```
+
+```{r}
+all_trips_biketype <- all_trips%>%
+  group_by(member_casual, rideable_type)%>%
+  summarize(total = n())
+all_trips_biketype
+```
+
+The ride length of the casual riders is higher than the annual members, so I will further analyze this insight.
+
+
+## Visualizations
+
+The first three plots explore the ride length and the preference between classic and electric bikes. Casual riders spend more time using the bike, especially during the weekends, from a monthly perspective, casual riders spend more time in a ride during spring and summer. The annual members do shorter trips and with a more stable length in both cases. About the type of bike, users seem to have more preference for the classic bike.
+
+* Ride length by weekday (in seconds)
+
+```{r}
+all_trips_stats%>%
+  ggplot(mapping=aes(x=weekday, y=median, fill=member_casual))+geom_col(position = "dodge")+
+  labs(title = "Midpoint ride length by subscription type", fill="Subscription type")+ylab("Time (in seconds)")+xlab(NULL)+
+  scale_fill_manual(values = c("casual" = "#72a8d5",
+                               "member" = "#96cd69"), labels = c("Casual rider", "Annual member"))+ theme_light()
+```
+
+
+* Bike type preference by type of subscription.
+
+```{r}
+all_trips_biketype%>%
+  ggplot(mapping = aes(x=member_casual, y=total, fill=rideable_type))+geom_col(position="dodge")+
+  labs(title = "Bike type usage by subscription type", fill="Bike type")+ylab("Number of rides")+xlab(NULL)+
+  scale_x_discrete(labels = c('Casual rider','Annual member'))+
+  scale_fill_manual(values = c("classic_bike" = "#c0475f",
+                               "electric_bike" = "#e6c200"), labels = c("Classic bike", "Electric bike"))+ theme_light()
+```
+
+* Ride length by month.
+
+```{r}
+all_trips%>%
+  group_by(member_casual, month)%>%
+  summarize(median = median(ride_length_sec))%>%
+  ggplot(mapping=aes(x=month, y=median, fill=member_casual))+geom_col(position = "dodge")+
+  labs(title = "Monthly midpoint ride length by subscription type", fill="Subscription type")+ylab("Time (in seconds)")+xlab(NULL)+
+  scale_fill_manual(values = c("casual" = "#72a8d5",
+                               "member" = "#96cd69"), labels = c("Casual rider", "Annual member"))+theme_light()
+```
+
+I made these last two plots to check the seasonal trends of this company, the first one shows the bike preference over time, and the second one, the number of rides of annual members and casual riders. In both plots, I noticed an increasing trend in the number of rides, and a period of very low activity between February and March. During my analysis, I realized that there is no data about classic bikes in November 2020, but I don't have further information about that month.
+
+* Use of each type of bike over the year.
+
+```{r}
+all_trips%>%
+  group_by(date, rideable_type)%>%
+  summarize(total = n())%>%
+  ggplot(mapping = aes(x=date, y=total, fill=rideable_type))+geom_area(position="dodge")+
+  scale_x_date(date_labels = "%y/%m",  date_breaks = "1 month")+
+  labs(title = "Bike type usage over the year", fill="Bike type")+ylab("Number of rides")+xlab("Year and Month")+
+  scale_fill_manual(values = c("classic_bike" = "#c0475f",
+                               "electric_bike" = "#e6c200"), labels = c("Classic bike", "Electric bike"))+ theme_light()
+```
+
+* Number of members and casual riders over the year.
+
+```{r}
+all_trips%>%
+  group_by(date, member_casual)%>%
+  summarize(total = n())%>%
+  ggplot(mapping = aes(x=date, y=total, fill=member_casual))+geom_area()+
+  scale_x_date(date_labels = "%y/%m",  date_breaks = "1 month")+
+  labs(title = "Nº of members and casual riders over the year", fill="Subscription type")+ylab("Number of rides")+xlab("Year and Month")+
+  scale_fill_manual(values = c("casual" = "#72a8d5",
+                               "member" = "#96cd69"), labels = c("Casual rider", "Annual member"))+ theme_light()
+```
+
+## Key findings
+
+* Annual members seem to have incorporated this service into their daily routine, using it mostly as public transport. Casual members tend to ride more time during the weekends, which means that they use this service mostly for leisure.
+* Casual riders do longer rides mainly for two reasons, the first one is because they mostly ride in their free time, the second is because of the temporary subscription. People tend to maximize the use of a service that has an expiry date.
+* Taking a closer look into the data of February and March, months of high contagion rate and lockdowns, the pandemic affected the usage of this service. During the following months, and with the influence of summer, the numbers recovered quickly.
+* Seasonality affects the bike usage, mostly in casual riders. They ride the bike more during the warm months.
+
+Based on my analysis, here are my top three recommendations:
+
+* Give the marketing strategy a leisure/touristic oriented perspective, with campaigns during spring and summer and important holidays.
+* Highlight in digital media the most famous places of Chicago, sharing urban routes suggestions, photos of the city and aiming the users to share their photos during their rides in exchange for prizes.
+* Offer special discounts focused on new annual members and, specially targeted to casual riders.
