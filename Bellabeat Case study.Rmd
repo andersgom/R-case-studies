@@ -1,0 +1,175 @@
+---
+title: "Bellabeat Case study (Google Data Analytics)"
+author: Andrés Sánchez Gómez
+date: "11/11/2021"
+output: html_notebook
+---
+
+# **BELLABEAT CASE STUDY**
+## **Google Data Analytics Capstone Project**
+
+# **About Bellabeat**
+Bellabeat is a high-tech manufacturer of health-focused products for women. They are a successful small company, but they have the potential to become a larger player in the global smart device market. With this analysis they expect to get insights about how their users use their smart devices, to plan a marketing strategy for the company.
+
+# **Questions for the analysis**
+1. What are some trends in smart device usage?
+2. How could these trends apply to Bellabeat customers?
+3. How could these trends help influence Bellabeat marketing strategy?
+
+# **The business task**
+Identifying growth opportunities by analysing the data produced by similar smart devices, to understand how Bellabeat users use their products.
+
+# **Setting up the environment / Importing data**
+
+```{r}
+#Loading packages
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(lubridate)
+```
+
+```{r include=FALSE}
+activity <- read_csv("../input/fitbit/Fitabase Data 4.12.16-5.12.16/dailyActivity_merged.csv")
+sleep <- read_csv("../input/fitbit/Fitabase Data 4.12.16-5.12.16/sleepDay_merged.csv")
+weight <- read_csv("../input/fitbit/Fitabase Data 4.12.16-5.12.16/weightLogInfo_merged.csv")
+```
+
+# **Description of the data**
+
+First, we check out the data we imported.
+
+```{r}
+head(activity)
+head(sleep)
+head(weight)
+```
+
+And run a few scripts to have more information about it.
+
+```{r}
+#Counting IDs to check the sample size
+n_distinct(activity$Id)
+n_distinct(sleep$Id)
+n_distinct(weight$Id)
+```
+
+```{r}
+#When was the data collected
+summarize(activity, min(ActivityDate), max(ActivityDate))
+summarize(sleep, min(SleepDay), max(SleepDay))
+```
+
+The kind of data provided is about *Daily activity*, *Sleep* and *Weight* from Fitbit users from April 12th, 2016 and May 9th, 2016.
+
+Based on the CLT (Central Limit Theorem), our sample size shouldn’t be less than 30. For this dataset, only the activity data meet criteria with 33 unique users. We will also consider for this report the sleep data, with 24 users, acknowledging that this part of the data may not be entirely reliable. The weight data only had 8 users, so we will not use it for the analysis.
+
+
+# **Cleaning and manipulation process**
+
+During this cleaning and manipulation process, we transformed the date columns of sleep and activity to merge them into a new table called daily_activity, to get the daily metrics. After that we converted the date from string in the date column, and added a new column with the weekdays, called weekday.
+
+```{r}
+#Transform the date columns
+sleep2 <- sleep %>%
+  separate(SleepDay, into=c('Date', 'Hour'),sep = ' ') %>%
+  select(-Hour)
+```
+
+```{r}
+#Change the column names 
+activity2 <- activity %>%
+  rename(Date = ActivityDate)
+```
+
+```{r}
+#Merging activity and sleep into daily_activity
+daily_activity <- merge(activity2, sleep2, all = TRUE)
+```
+
+```{r}
+#Clean the column names
+daily_activity <- daily_activity %>%
+  clean_names() %>%
+  rename_with(tolower)
+```
+
+```{r}
+#Convert date from strings in date column:
+daily_activity <- daily_activity %>%
+  mutate(date = mdy(date))
+```
+
+```{r}
+#Add a column with the day of the week called weekday
+daily_activity$weekday <- wday(daily_activity$date, label = TRUE, abbr = FALSE, week_start = getOption("lubridate.week.start", 1))
+levels(daily_activity$weekday) <- c("Monday", "Tuesday","Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+```
+
+
+# **Analysis**
+
+To know what the lifestyle of the users is, I summarized two tables, one with the weekly average sedentary hours and the weekly average distance in kilometres, and another one with the weekly average sleep time and time in bed and the weekly average time they spend awake in bed.
+
+```{r}
+#Summary about the average sedentary time and the average total distance of each weekday
+avg_activity <- daily_activity %>%
+  group_by(weekday) %>%
+  summarize(avg_sedentary_hours = mean(sedentary_minutes)/60, avg_distance_km = mean(total_distance))
+#Table for reference
+avg_activity
+```
+
+```{r}
+#Summary about the average sleep time, the average time in bed and the time people spend awake in bed of each weekday
+avg_sleep <- daily_activity %>%
+  drop_na() %>%
+  group_by(weekday) %>%
+  summarize(avg_hours_asleep = mean(total_minutes_asleep)/60, avg_time_in_bed = mean(total_time_in_bed)/60, min_awake_in_bed= (avg_time_in_bed - avg_hours_asleep)*60)
+#Table for reference
+avg_sleep
+```
+
+**Plots about activity**
+
+We can notice that the sedentary hours don’t change along the week, but we find that the maximum and the minimum average distance are respectively in Saturday and Sunday.
+
+```{r}
+avg_activity %>%
+  ggplot(mapping=aes(x=weekday, y=avg_sedentary_hours, fill=avg_sedentary_hours))+geom_col()+
+labs(title = "Sedentary hours per weekday", fill="Sedentary hours")+ylab("Sedentary hours")+xlab(NULL)
+```
+
+```{r}
+avg_activity%>%
+  ggplot(mapping=aes(x=weekday, y=avg_distance_km, fill=avg_distance_km))+geom_col()+
+  labs(title = "Average distance per weekday", fill="Kilometres")+ylab("Distance (in km)")+xlab(NULL)
+```
+
+**Plots about sleep data**
+
+About the sleep data, there’s a direct correlation between the time spent in bed and the time asleep but the time awake in bed increases on Sundays by 50.8 minutes.
+
+```{r}
+daily_activity %>%
+  ggplot(mapping=aes(x=total_minutes_asleep/60, y=total_time_in_bed/60))+geom_point()+stat_smooth()+
+  labs(title = "Relation between time in bed and time asleep")+
+  ylab("Hours in bed")+xlab("Hours asleep")
+```
+
+```{r}
+avg_sleep %>%
+  ggplot(mapping= aes(x=weekday, y=min_awake_in_bed, fill=min_awake_in_bed))+geom_col()+
+  labs(title = "Time awake in bed", fill = "Minutes")+
+  ylab("Minutes in bed (awake)")+xlab(NULL)
+```
+
+# **Share and Act**
+
+From these insights, we can conclude that the average users have a Monday to Friday schedule, where they spend most of the time sitting. During the weekends they are more active on Saturdays but also sleep more and spend more time in bed on Sundays. Some interesting features in the app and the smart device would be:
+
+* A report of the sleep quality that informs you if your sleep time is sufficient or you’re oversleeping, and tips to optimize your sleep quality. 
+* A reminder of inactivity that pops up when the user has been sitting for a long time.
+* A log of the daily distance and rankings, global and for friends, to motivate the user to walk more.
+
+These could be accompanied with articles about physical exercise, motivation, sleep quality and sedentarism, to educate the user about the importance of having a healthy lifestyle.
